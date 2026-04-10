@@ -1,0 +1,64 @@
+{% extends "ecg/base.html" %}
+
+{% block title %}Chi tiết dự đoán · Hệ thống phân tích ECG{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card card-glass mb-4">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h5 mb-3">Chi tiết kết quả dự đoán</h1>
+
+                <dl class="row small detail-list">
+                    <dt class="col-sm-4 text-secondary">Thời gian dự đoán</dt>
+                    <dd class="col-sm-8">{{ prediction.timestamp|date:"d/m/Y H:i:s" }}</dd>
+
+                    <dt class="col-sm-4 text-secondary">Người dùng</dt>
+                    <dd class="col-sm-8">
+                        {% if prediction.signal.user %}
+                            {{ prediction.signal.user.username }}
+                        {% else %}
+                            Khách
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4 text-secondary">File tín hiệu</dt>
+                    <dd class="col-sm-8">{{ prediction.signal.signal_file }}</dd>
+
+                    <dt class="col-sm-4 text-secondary">Tần số lấy mẫu</dt>
+                    <dd class="col-sm-8">{{ prediction.signal.sampling_rate }} Hz</dd>
+
+                    <dt class="col-sm-4 text-secondary">Thời lượng</dt>
+                    <dd class="col-sm-8">{{ prediction.signal.duration|floatformat:2 }} s</dd>
+
+                    <dt class="col-sm-4 text-secondary">Model</dt>
+                    <dd class="col-sm-8">{{ prediction.model.model_name }} {{ prediction.model.version }}</dd>
+
+                    <dt class="col-sm-4 text-secondary">Đường dẫn model</dt>
+                    <dd class="col-sm-8">{{ prediction.model.model_path }}</dd>
+
+                    <dt class="col-sm-4 text-secondary">Lớp mô hình</dt>
+                    <dd class="col-sm-8">{{ prediction.predicted_class }}</dd>
+
+                    <dt class="col-sm-4 text-secondary">Kết quả hiển thị</dt>
+                    <dd class="col-sm-8">
+                        {% if prediction.mapped_result == "Bình thường" %}
+                            <span class="badge badge-normal">Bình thường</span>
+                        {% else %}
+                            <span class="badge badge-abnormal">Bất thường</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4 text-secondary">Độ tin cậy</dt>
+                    <dd class="col-sm-8">{{ prediction.confidence_score|floatformat:2 }}</dd>
+                </dl>
+
+                <a href="{% url 'ecg:analysis_history' %}" class="btn btn-outline-light btn-sm">
+                    Quay lại lịch sử phân tích
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

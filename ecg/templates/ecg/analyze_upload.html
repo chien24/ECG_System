@@ -1,0 +1,120 @@
+{% extends "ecg/base.html" %}
+
+{% block title %}Phân tích ECG · Hệ thống phân tích ECG{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card card-glass mb-4">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h4 mb-3">Phân tích tín hiệu ECG</h1>
+                <p class="text-secondary small mb-4">
+                    Tải lên file ECG dạng CSV (một cột giá trị biên độ theo thời gian). Hệ thống sẽ tiền xử lý,
+                    đưa qua mô hình Deep Learning và trả về kết quả:
+                    <strong>Bình thường</strong> nếu tất cả nhịp thuộc lớp 0,
+                    <strong>Bất thường</strong> nếu tồn tại nhịp thuộc các lớp 1–4.
+                </p>
+
+                <form method="post" enctype="multipart/form-data" class="mb-3">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="ecgFile" class="form-label">Chọn file ECG (CSV)</label>
+                        <input class="form-control" type="file" id="ecgFile" name="ecg_file" accept=".csv" required>
+                        <div class="form-text text-secondary">
+                            Ví dụ: 1 cột dữ liệu, mỗi dòng là một mẫu tín hiệu.
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        Phân tích tín hiệu
+                    </button>
+                </form>
+
+                {% if error %}
+                    <div class="alert alert-danger mt-3 mb-0">
+                        {{ error }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if overall_status %}
+            <div class="card card-glass">
+                <div class="card-body p-4 p-md-5">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h2 class="h5 mb-1">Kết quả phân tích</h2>
+                            {% if file_name %}
+                                <div class="text-secondary small">File: {{ file_name }}</div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            {% if overall_status == "Bình thường" %}
+                                <span class="badge badge-normal px-3 py-2 rounded-pill">
+                                    Bình thường
+                                </span>
+                            {% else %}
+                                <span class="badge badge-abnormal px-3 py-2 rounded-pill">
+                                    Bất thường
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if distribution %}
+                        <p class="text-secondary small mb-2">
+                            Phân bố dự đoán theo 5 lớp của mô hình:
+                        </p>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">Loại nhịp tim</th>
+                                        <th class="text-center">Số nhịp</th>
+                                        <th class="text-center">Hiển thị trên web</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in distribution %}
+                                        <tr>
+                                            <td class="text-center">{{ item.label }}</td>
+                                            <td class="text-center">{{ item.count }}</td>
+                                            <td class="text-center">
+                                                {% if item.status == "Bình thường" %}
+                                                    <span class="badge badge-normal">Bình thường</span>
+                                                {% else %}
+                                                    <span class="badge badge-abnormal">Bất thường</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+
+                    <p class="text-secondary small mt-3 mb-0">
+                        Lưu ý: Kết quả chỉ mang tính chất hỗ trợ, không thay thế chẩn đoán của bác sĩ chuyên khoa.
+                    </p>
+                </div>
+            </div>
+
+            {% if ecg_chart_base64 %}
+                <div class="card card-glass mt-4">
+                    <div class="card-body p-4 p-md-5">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3 class="h5 mb-0">Biểu đồ tín hiệu ECG</h3>
+                            <a href="data:image/png;base64,{{ ecg_chart_base64 }}" download="ecg_chart.png" class="btn btn-outline-success btn-sm">
+                                Tải biểu đồ PNG
+                            </a>
+                        </div>
+                        <div class="ecg-chart-container">
+                            <img src="data:image/png;base64,{{ ecg_chart_base64 }}" alt="Biểu đồ ECG" class="img-fluid rounded">
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

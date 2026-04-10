@@ -1,0 +1,77 @@
+{% extends "ecg/base.html" %}
+
+{% block title %}Trang chủ · Hệ thống phân tích ECG{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mb-4">
+    <div class="col-lg-8">
+        <div class="card card-glass border-0">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-3">Hệ thống phân tích ECG thời gian thực bằng Deep Learning</h1>
+                <p class="mb-3 text-secondary">
+                    Ứng dụng mô hình học sâu để phát hiện loạn nhịp tim dựa trên tín hiệu ECG một chiều.
+                </p>
+                <ul class="mb-0 text-secondary">
+                    <li>Tiền xử lý tín hiệu ECG (lọc, phát hiện R-peak, trích xuất nhịp).</li>
+                    <li>Mô hình CNN 1D với 5 lớp đầu ra.</li>
+                    <li>Trên giao diện web: lớp 0 được hiển thị là <strong>Bình thường</strong>, bốn lớp còn lại hiển thị là <strong>Bất thường</strong>.</li>
+                </ul>
+                <div class="mt-4">
+                    <a href="{% url 'ecg:analyze_upload' %}" class="btn btn-success">
+                        Bắt đầu phân tích ECG
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card card-glass h-100">
+            <div class="card-body">
+                <h2 class="h5">Người dùng</h2>
+                <p class="text-secondary small mb-2">
+                    Theo sơ đồ Use Case, người dùng tương tác chủ yếu thông qua:
+                </p>
+                <ul class="small text-secondary mb-0">
+                    <li>Tải tín hiệu ECG cần phân tích.</li>
+                    <li>Xem kết quả phân loại bình thường / bất thường.</li>
+                    <li>(Mở rộng) Quản lý lịch sử các lần đo.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-glass h-100">
+            <div class="card-body">
+                <h2 class="h5">Luồng xử lý</h2>
+                <p class="text-secondary small mb-2">
+                    Tương ứng với biểu đồ hoạt động & trình tự:
+                </p>
+                <ul class="small text-secondary mb-0">
+                    <li>Nhận file ECG từ người dùng.</li>
+                    <li>Tiền xử lý & trích xuất nhịp.</li>
+                    <li>Đưa vào mô hình Deep Learning.</li>
+                    <li>Trả về nhãn lớp và quy đổi ra trạng thái hiển thị.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-glass h-100">
+            <div class="card-body">
+                <h2 class="h5">Dữ liệu & Lưu trữ</h2>
+                <p class="text-secondary small mb-2">
+                    Bám sát biểu đồ lớp & CSDL:
+                </p>
+                <ul class="small text-secondary mb-0">
+                    <li>(Mở rộng) Bảng bệnh nhân, phiên đo, kết quả.</li>
+                    <li>Lưu thông tin để phục vụ thống kê & nghiên cứu.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

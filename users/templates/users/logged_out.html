@@ -1,0 +1,38 @@
+{% extends "ecg/base.html" %}
+{% load static %}
+
+{% block title %}Đã đăng xuất · Hệ thống phân tích ECG{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'users/styles.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card card-glass user-card">
+            <div class="card-body p-4 p-md-5 text-center">
+                <div class="user-logged-out-icon mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                </div>
+                <h1 class="h5 mb-2">Bạn đã đăng xuất</h1>
+                <p class="text-secondary small mb-2">
+                    Cảm ơn bạn đã sử dụng hệ thống phân tích ECG.
+                </p>
+                <p class="text-secondary small mb-4">
+                    Bạn sẽ được chuyển về <strong>Trang chủ</strong> sau 3 giây.
+                </p>
+                <a href="{% url 'users:login' %}" class="btn btn-success user-btn">Đăng nhập lại</a>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    setTimeout(function () {
+        window.location.href = "{% url 'ecg:home' %}";
+    }, 3000);
+</script>
+{% endblock %}
