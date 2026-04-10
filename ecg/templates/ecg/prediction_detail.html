@@ -2,63 +2,172 @@
 
 {% block title %}Chi tiết dự đoán · Hệ thống phân tích ECG{% endblock %}
 
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card card-glass mb-4">
-            <div class="card-body p-4 p-md-5">
-                <h1 class="h5 mb-3">Chi tiết kết quả dự đoán</h1>
+{% block extra_css %}
+<style>
+  /* ── Detail list colours ── */
+  .detail-list dt {
+    color: #94a3b8;   /* light slate – readable on dark */
+    font-weight: 500;
+  }
+  .detail-list dd {
+    color: #f1f5f9;   /* near-white for values */
+    margin-bottom: 0.85rem;
+  }
 
-                <dl class="row small detail-list">
-                    <dt class="col-sm-4 text-secondary">Thời gian dự đoán</dt>
-                    <dd class="col-sm-8">{{ prediction.timestamp|date:"d/m/Y H:i:s" }}</dd>
+  /* ── Download button strip ── */
+  .download-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(148,163,184,0.2);
+  }
 
-                    <dt class="col-sm-4 text-secondary">Người dùng</dt>
-                    <dd class="col-sm-8">
-                        {% if prediction.signal.user %}
-                            {{ prediction.signal.user.username }}
-                        {% else %}
-                            Khách
-                        {% endif %}
-                    </dd>
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 0.6rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+    cursor: pointer;
+  }
 
-                    <dt class="col-sm-4 text-secondary">File tín hiệu</dt>
-                    <dd class="col-sm-8">{{ prediction.signal.signal_file }}</dd>
+  .btn-download:active { transform: scale(0.97); }
 
-                    <dt class="col-sm-4 text-secondary">Tần số lấy mẫu</dt>
-                    <dd class="col-sm-8">{{ prediction.signal.sampling_rate }} Hz</dd>
+  .btn-dl-chart {
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    color: #fff;
+    border: none;
+  }
+  .btn-dl-chart:hover { background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 18px rgba(99,102,241,0.4); color: #fff; }
 
-                    <dt class="col-sm-4 text-secondary">Thời lượng</dt>
-                    <dd class="col-sm-8">{{ prediction.signal.duration|floatformat:2 }} s</dd>
+  .btn-dl-csv {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    color: #fff;
+    border: none;
+  }
+  .btn-dl-csv:hover { background: linear-gradient(135deg, #0284c7, #0ea5e9); box-shadow: 0 4px 18px rgba(14,165,233,0.4); color: #fff; }
 
-                    <dt class="col-sm-4 text-secondary">Model</dt>
-                    <dd class="col-sm-8">{{ prediction.model.model_name }} {{ prediction.model.version }}</dd>
+  .download-note {
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-top: 0.5rem;
+    width: 100%;
+  }
 
-                    <dt class="col-sm-4 text-secondary">Đường dẫn model</dt>
-                    <dd class="col-sm-8">{{ prediction.model.model_path }}</dd>
+  /* ── Section heading ── */
+  .section-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 0.4rem;
+  }
 
-                    <dt class="col-sm-4 text-secondary">Lớp mô hình</dt>
-                    <dd class="col-sm-8">{{ prediction.predicted_class }}</dd>
-
-                    <dt class="col-sm-4 text-secondary">Kết quả hiển thị</dt>
-                    <dd class="col-sm-8">
-                        {% if prediction.mapped_result == "Bình thường" %}
-                            <span class="badge badge-normal">Bình thường</span>
-                        {% else %}
-                            <span class="badge badge-abnormal">Bất thường</span>
-                        {% endif %}
-                    </dd>
-
-                    <dt class="col-sm-4 text-secondary">Độ tin cậy</dt>
-                    <dd class="col-sm-8">{{ prediction.confidence_score|floatformat:2 }}</dd>
-                </dl>
-
-                <a href="{% url 'ecg:analysis_history' %}" class="btn btn-outline-light btn-sm">
-                    Quay lại lịch sử phân tích
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
+  .card-glass h1 { color: #e2e8f0; }
+</style>
 {% endblock %}
 
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card card-glass mb-4">
+      <div class="card-body p-4 p-md-5">
+
+        <p class="section-title mb-1">Lịch sử phân tích</p>
+        <h1 class="h5 mb-4">Chi tiết kết quả dự đoán</h1>
+
+        <dl class="row small detail-list">
+
+          <dt class="col-sm-4">Thời gian dự đoán</dt>
+          <dd class="col-sm-8">{{ prediction.timestamp|date:"d/m/Y H:i:s" }}</dd>
+
+          <dt class="col-sm-4">Người dùng</dt>
+          <dd class="col-sm-8">
+            {% if prediction.signal.user %}
+              {{ prediction.signal.user.username }}
+            {% else %}
+              <span style="color:#64748b">Khách</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">File tín hiệu</dt>
+          <dd class="col-sm-8">{{ prediction.signal.signal_file }}</dd>
+
+          <dt class="col-sm-4">Tần số lấy mẫu</dt>
+          <dd class="col-sm-8">{{ prediction.signal.sampling_rate }} Hz</dd>
+
+          <dt class="col-sm-4">Thời lượng</dt>
+          <dd class="col-sm-8">{{ prediction.signal.duration|floatformat:2 }} s</dd>
+
+          <dt class="col-sm-4">Model</dt>
+          <dd class="col-sm-8">{{ prediction.model.model_name }} {{ prediction.model.version }}</dd>
+
+          <dt class="col-sm-4">Đường dẫn model</dt>
+          <dd class="col-sm-8" style="word-break:break-all;">{{ prediction.model.model_path }}</dd>
+
+          <dt class="col-sm-4">Lớp mô hình</dt>
+          <dd class="col-sm-8">{{ prediction.predicted_class }}</dd>
+
+          <dt class="col-sm-4">Kết quả hiển thị</dt>
+          <dd class="col-sm-8">
+            {% if prediction.mapped_result == "Bình thường" %}
+              <span class="badge badge-normal">Bình thường</span>
+            {% else %}
+              <span class="badge badge-abnormal">Bất thường</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">Độ tin cậy</dt>
+          <dd class="col-sm-8">{{ prediction.confidence_score|floatformat:2 }}</dd>
+
+        </dl>
+
+        {# ── Download section (visible to authenticated users only) ── #}
+        {% if user.is_authenticated %}
+        <div class="download-strip">
+          <a id="btn-download-chart"
+             href="{% url 'ecg:download_ecg_chart' prediction.id %}"
+             class="btn-download btn-dl-chart">
+            <!-- chart icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                 viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 3h18v2H3V3zm0 16h18v2H3v-2zm8-12a1 1 0 0 1 2 0v7.586l2.293-2.293a1 1 0 0 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L11 14.586V7z"/>
+            </svg>
+            Tải biểu đồ ECG (PNG)
+          </a>
+
+          <a id="btn-download-csv"
+             href="{% url 'ecg:download_ecg_csv' prediction.id %}"
+             class="btn-download btn-dl-csv">
+            <!-- csv icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                 viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8v-2zm0-4h8v2H8v-2z"/>
+            </svg>
+            Tải file CSV gốc
+          </a>
+
+          <span class="download-note">
+            ⚠️ File có thể không còn trên máy chủ nếu được tải lên từ lâu. 
+            Liên hệ admin nếu cần phục hồi dữ liệu.
+          </span>
+        </div>
+        {% endif %}
+
+        <div class="mt-4">
+          <a href="{% url 'ecg:analysis_history' %}" class="btn btn-outline-light btn-sm">
+            ← Quay lại lịch sử phân tích
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

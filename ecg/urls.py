@@ -18,6 +18,16 @@ urlpatterns = [
         views.prediction_detail,
         name="prediction_detail",
     ),
+    path(
+        "tai-ve-csv/<uuid:prediction_id>/",
+        views.download_ecg_csv,
+        name="download_ecg_csv",
+    ),
+    path(
+        "tai-ve-bieu-do/<uuid:prediction_id>/",
+        views.download_ecg_chart,
+        name="download_ecg_chart",
+    ),
 ]
 
 

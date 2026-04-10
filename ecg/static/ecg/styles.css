@@ -57,9 +57,10 @@ footer {
 
 .detail-list dt {
     font-weight: 500;
+    color: #94a3b8;   /* slate-400 – clearly readable on dark bg */
 }
 
 .detail-list dd {
+    color: #f1f5f9;   /* slate-100 – bright values */
     margin-bottom: 0.75rem;
 }
-

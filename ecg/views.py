@@ -2,6 +2,8 @@ import base64
 from io import BytesIO
 from pathlib import Path
 
+from django.http import FileResponse, Http404, HttpResponse
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -283,3 +285,77 @@ def delete_analysis_history(request):
 
     return redirect("ecg:analysis_history")
 
+
+@login_required(login_url="users:login")
+def download_ecg_csv(request, prediction_id):
+    """
+    Tải xuống file CSV tín hiệu ECG gốc.
+    - Admin tải được của bất kỳ ai.
+    - User thường chỉ tải được của chính mình.
+    """
+    if request.user.is_staff:
+        prediction = get_object_or_404(
+            Prediction.objects.select_related("signal"),
+            id=prediction_id,
+        )
+    else:
+        prediction = get_object_or_404(
+            Prediction.objects.select_related("signal"),
+            id=prediction_id,
+            signal__user=request.user,
+        )
+
+    upload_dir = Path(getattr(settings, "MEDIA_ROOT", settings.BASE_DIR / "uploads"))
+    file_path = upload_dir / prediction.signal.signal_file
+
+    if not file_path.exists():
+        raise Http404("File CSV không tồn tại trên máy chủ.")
+
+    response = FileResponse(
+        open(file_path, "rb"),
+        content_type="text/csv",
+        as_attachment=True,
+        filename=prediction.signal.signal_file,
+    )
+    return response
+
+
+@login_required(login_url="users:login")
+def download_ecg_chart(request, prediction_id):
+    """
+    Tạo và tải xuống biểu đồ tín hiệu ECG dưới dạng ảnh PNG.
+    - Admin tải được của bất kỳ ai.
+    - User thường chỉ tải được của chính mình.
+    """
+    if request.user.is_staff:
+        prediction = get_object_or_404(
+            Prediction.objects.select_related("signal"),
+            id=prediction_id,
+        )
+    else:
+        prediction = get_object_or_404(
+            Prediction.objects.select_related("signal"),
+            id=prediction_id,
+            signal__user=request.user,
+        )
+
+    upload_dir = Path(getattr(settings, "MEDIA_ROOT", settings.BASE_DIR / "uploads"))
+    file_path = upload_dir / prediction.signal.signal_file
+
+    if not file_path.exists():
+        raise Http404("File CSV không tồn tại trên máy chủ, không thể tạo biểu đồ.")
+
+    try:
+        df = pd.read_csv(file_path, header=None)
+        raw_signal = df.iloc[:, 0].values.astype(float)
+    except Exception:
+        raise Http404("Không đọc được file CSV để tạo biểu đồ.")
+
+    sampling_rate = prediction.signal.sampling_rate or 125
+    chart_b64 = _plot_ecg_to_base64(raw_signal, sampling_rate)
+    png_bytes = base64.b64decode(chart_b64)
+
+    chart_filename = Path(prediction.signal.signal_file).stem + "_ecg_chart.png"
+    response = HttpResponse(png_bytes, content_type="image/png")
+    response["Content-Disposition"] = f'attachment; filename="{chart_filename}"'
+    return response
