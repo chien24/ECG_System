@@ -98,6 +98,13 @@ def home(request):
     return render(request, "ecg/home.html")
 
 
+def realtime_dashboard(request):
+    """
+    Trang dashboard phân tích ECG thời gian thực qua WebSocket.
+    """
+    return render(request, "ecg/realtime_dashboard.html")
+
+
 def analyze_upload(request):
     """
     Giao diện chính cho phép người dùng tải file ECG (CSV)

@@ -7,6 +7,7 @@ app_name = "ecg"
 urlpatterns = [
     path("", views.home, name="home"),
     path("phan-tich-tin-hieu/", views.analyze_upload, name="analyze_upload"),
+    path("phan-tich-realtime/", views.realtime_dashboard, name="realtime_dashboard"),
     path("lich-su-phan-tich/", views.analysis_history, name="analysis_history"),
     path(
         "xoa-lich-su-phan-tich/",

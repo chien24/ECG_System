@@ -1,0 +1,531 @@
+{% extends "ecg/base.html" %}
+{% load static %}
+
+{% block title %}Theo dõi ECG Thời gian thực · Hệ thống phân tích ECG{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ══ Reset & layout ══════════════════════════════════════════════════════ */
+  :root {
+    --green: #22c55e;
+    --red:   #ef4444;
+    --blue:  #38bdf8;
+    --amber: #fbbf24;
+    --bg:    #0f172a;
+    --surface: #1e293b;
+    --border:  rgba(148,163,184,.2);
+    --text-muted: #94a3b8;
+  }
+
+  body { background: var(--bg); }
+
+  /* ══ Status bar ═════════════════════════════════════════════════════════ */
+  #status-bar {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .5rem 1rem; border-radius: .75rem;
+    background: rgba(30,41,59,.8); border: 1px solid var(--border);
+    font-size: .82rem; color: var(--text-muted); letter-spacing: .02em;
+  }
+  #ws-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--text-muted);
+    transition: background .3s;
+  }
+  #ws-dot.connected    { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 1.5s infinite; }
+  #ws-dot.disconnected { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+  #ws-dot.streaming    { background: var(--blue);  box-shadow: 0 0 8px var(--blue); animation: pulse-dot .8s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ══ Stat cards ═════════════════════════════════════════════════════════ */
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 1rem; padding: 1.25rem 1.5rem;
+    display: flex; flex-direction: column; gap: .35rem;
+    transition: border-color .3s;
+  }
+  .stat-label {
+    font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .stat-value {
+    font-size: 2rem; font-weight: 700; line-height: 1;
+    transition: color .3s;
+  }
+  .stat-sub { font-size: .78rem; color: var(--text-muted); }
+
+  /* Prediction indicator */
+  #pred-card { position: relative; overflow: hidden; }
+  #pred-glow {
+    position: absolute; top: -40%; left: -20%;
+    width: 140%; height: 180%; border-radius: 50%;
+    opacity: 0; transition: opacity .5s, background .5s;
+    pointer-events: none;
+  }
+  #pred-card.normal   #pred-glow { background: radial-gradient(circle, rgba(34,197,94,.15) 0%, transparent 70%); opacity: 1; }
+  #pred-card.abnormal #pred-glow { background: radial-gradient(circle, rgba(239,68,68,.2)  0%, transparent 70%); opacity: 1; }
+  #pred-value.normal   { color: var(--green); }
+  #pred-value.abnormal { color: var(--red);   animation: flash-red .6s ease; }
+  @keyframes flash-red { 0%{text-shadow:0 0 0 transparent} 50%{text-shadow:0 0 20px var(--red)} 100%{text-shadow:0 0 0 transparent} }
+
+  /* ══ ECG chart wrapper ══════════════════════════════════════════════════ */
+  #ecg-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 1rem; padding: 1.25rem 1.5rem;
+  }
+  #ecg-chart-container { position: relative; height: 220px; }
+
+  /* Grid lines overlay (decorative) */
+  #ecg-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(34,197,94,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,197,94,.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+    border-radius: .5rem;
+  }
+  canvas#ecgChart { position: relative; z-index: 1; }
+
+  /* ══ Upload zone ════════════════════════════════════════════════════════ */
+  #upload-zone {
+    border: 2px dashed var(--border); border-radius: 1rem;
+    padding: 2rem; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  #upload-zone:hover, #upload-zone.drag-over {
+    border-color: var(--green); background: rgba(34,197,94,.04);
+  }
+  #upload-zone .icon { font-size: 2.5rem; display: block; margin-bottom: .5rem; }
+
+  /* ══ Beat distribution bar ══════════════════════════════════════════════ */
+  .beat-bar { height: 6px; border-radius: 3px; background: var(--bg); overflow: hidden; margin-top: .25rem; }
+  .beat-bar-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+
+  /* ══ Scrollbar ══════════════════════════════════════════════════════════ */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ══ Controls ═══════════════════════════════════════════════════════════ */
+  .btn-ecg {
+    border-radius: .75rem; font-weight: 600; font-size: .88rem;
+    padding: .55rem 1.4rem; transition: all .2s;
+  }
+  .btn-ecg:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ══ Log panel ══════════════════════════════════════════════════════════ */
+  #event-log {
+    height: 130px; overflow-y: auto; font-size: .75rem; font-family: monospace;
+    color: var(--text-muted); background: var(--bg);
+    border-radius: .6rem; padding: .6rem .9rem; border: 1px solid var(--border);
+  }
+  .log-normal   { color: var(--green); }
+  .log-abnormal { color: var(--red); }
+  .log-info     { color: var(--blue); }
+  .log-warn     { color: var(--amber); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 mb-0 fw-bold">📡 Theo dõi ECG Thời gian thực</h1>
+    <p class="text-secondary small mb-0">Streaming · Deep Learning · Sliding Window 5s</p>
+  </div>
+  <!-- Status bar -->
+  <div id="status-bar">
+    <span id="ws-dot"></span>
+    <span id="ws-status-text">Chưa kết nối</span>
+  </div>
+</div>
+
+<!-- ── Row 1: Stat cards ──────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- Prediction -->
+  <div class="col-6 col-md-3">
+    <div class="stat-card h-100" id="pred-card">
+      <div id="pred-glow"></div>
+      <span class="stat-label">Kết quả</span>
+      <span class="stat-value" id="pred-value">–</span>
+      <span class="stat-sub">Bình thường / Bất thường</span>
+    </div>
+  </div>
+  <!-- Confidence -->
+  <div class="col-6 col-md-3">
+    <div class="stat-card h-100">
+      <span class="stat-label">Độ tin cậy</span>
+      <span class="stat-value text-info" id="conf-value">– %</span>
+      <span class="stat-sub">Softmax confidence</span>
+    </div>
+  </div>
+  <!-- Abnormal ratio -->
+  <div class="col-6 col-md-3">
+    <div class="stat-card h-100">
+      <span class="stat-label">Tỉ lệ bất thường</span>
+      <span class="stat-value" id="ratio-value" style="color:var(--amber)">– %</span>
+      <span class="stat-sub">Ngưỡng cảnh báo: 20 %</span>
+    </div>
+  </div>
+  <!-- Samples streamed -->
+  <div class="col-6 col-md-3">
+    <div class="stat-card h-100">
+      <span class="stat-label">Mẫu đã xử lý</span>
+      <span class="stat-value text-secondary" id="samples-value">0</span>
+      <span class="stat-sub">fs = 125 Hz</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 2: Chart + Controls ───────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- ECG Chart -->
+  <div class="col-12 col-lg-8">
+    <div id="ecg-card">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="small fw-semibold" style="color:var(--green)">⚡ ECG Waveform (5s sliding window)</span>
+        <span class="badge" id="stream-badge" style="background:rgba(148,163,184,.15); color:var(--text-muted)">IDLE</span>
+      </div>
+      <div id="ecg-chart-container">
+        <div id="ecg-grid"></div>
+        <canvas id="ecgChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="col-12 col-lg-4 d-flex flex-column gap-3">
+    <!-- Upload zone -->
+    <div id="upload-zone" onclick="document.getElementById('ecgFileInput').click()">
+      <span class="icon">📂</span>
+      <p class="mb-1 fw-semibold">Tải file ECG (CSV)</p>
+      <p class="text-secondary small mb-0">Kéo thả hoặc click để chọn file</p>
+      <p class="small mt-2 mb-0" id="file-name-display" style="color:var(--blue)"></p>
+      <input type="file" id="ecgFileInput" accept=".csv" style="display:none">
+    </div>
+
+    <!-- Controls -->
+    <div class="d-flex gap-2">
+      <button class="btn btn-success btn-ecg flex-fill" id="btn-start" disabled>
+        ▶ Bắt đầu
+      </button>
+      <button class="btn btn-outline-danger btn-ecg flex-fill" id="btn-stop" disabled>
+        ⏹ Dừng
+      </button>
+    </div>
+
+    <!-- Progress bar -->
+    <div>
+      <div class="d-flex justify-content-between small mb-1" style="color:var(--text-muted)">
+        <span>Tiến độ</span>
+        <span id="progress-pct">0 %</span>
+      </div>
+      <div class="beat-bar">
+        <div class="beat-bar-fill" id="progress-fill" style="width:0%; background:var(--blue)"></div>
+      </div>
+    </div>
+
+    <!-- Abnormal ratio bar -->
+    <div>
+      <div class="d-flex justify-content-between small mb-1" style="color:var(--text-muted)">
+        <span>Tỉ lệ beats bất thường</span>
+        <span id="ratio-pct-label">0 %</span>
+      </div>
+      <div class="beat-bar">
+        <div class="beat-bar-fill" id="ratio-fill" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 3: Event log ───────────────────────────────────────────────────── -->
+<div class="row g-3">
+  <div class="col-12">
+    <div class="stat-card">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="stat-label" style="font-size:.7rem">📋 Nhật ký sự kiện</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="clearLog()" style="font-size:.7rem; padding:.15rem .6rem; border-radius:.4rem">
+          Xóa log
+        </button>
+      </div>
+      <div id="event-log"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}{% endblock %}
+
+<!-- Chart.js + custom logic (outside block to ensure it loads after body) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   ECG Real-time Dashboard – WebSocket client
+   ══════════════════════════════════════════════════════════════════════════ */
+
+// ── Constants ───────────────────────────────────────────────────────────────
+const FS               = 125;
+const DISPLAY_SECONDS  = 8;          // hiển thị 8s trên chart
+const MAX_POINTS       = DISPLAY_SECONDS * FS;
+const WS_URL           = `ws://${location.host}/ws/ecg/`;
+const RECONNECT_DELAY  = 3000;
+
+// ── State ───────────────────────────────────────────────────────────────────
+let ws             = null;
+let ecgBuffer      = [];             // raw samples đang hiển thị
+let rawSignal      = null;           // full signal từ CSV
+let totalSamples   = 0;
+let samplesStreamed = 0;
+let streamActive   = false;
+let reconnectTimer = null;
+let isUserStop     = false;
+
+// ── Chart setup ─────────────────────────────────────────────────────────────
+const ctx = document.getElementById("ecgChart").getContext("2d");
+const ecgChart = new Chart(ctx, {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [{
+      label: "ECG",
+      data: [],
+      borderColor: "#22c55e",
+      borderWidth: 1.2,
+      pointRadius: 0,
+      tension: 0.15,
+      fill: {
+        target: "origin",
+        above: "rgba(34,197,94,0.04)",
+      },
+    }],
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "nearest", intersect: false },
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    scales: {
+      x: { display: false },
+      y: {
+        display: true,
+        grid: { color: "rgba(148,163,184,.06)" },
+        ticks: { color: "#475569", font: { size: 10 }, maxTicksLimit: 6 },
+        border: { color: "transparent" },
+      },
+    },
+  },
+});
+
+// ── DOM helpers ──────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const wsStatusText  = $("ws-status-text");
+const wsDot         = $("ws-dot");
+const predCard      = $("pred-card");
+const predValue     = $("pred-value");
+const confValue     = $("conf-value");
+const ratioValue    = $("ratio-value");
+const samplesValue  = $("samples-value");
+const streamBadge   = $("stream-badge");
+const progressFill  = $("progress-fill");
+const progressPct   = $("progress-pct");
+const ratioFill     = $("ratio-fill");
+const ratioPctLabel = $("ratio-pct-label");
+const btnStart      = $("btn-start");
+const btnStop       = $("btn-stop");
+const eventLog      = $("event-log");
+const fileNameDisp  = $("file-name-display");
+
+// ── Logging ──────────────────────────────────────────────────────────────────
+function log(msg, cls = "log-info") {
+  const ts  = new Date().toLocaleTimeString("vi-VN");
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = `[${ts}] ${msg}`;
+  eventLog.appendChild(div);
+  eventLog.scrollTop = eventLog.scrollHeight;
+}
+window.clearLog = () => { eventLog.innerHTML = ""; };
+
+// ── WS dot / status ──────────────────────────────────────────────────────────
+function setWsState(state, text) {
+  wsDot.className = state;
+  wsStatusText.textContent = text;
+}
+
+// ── Connect WebSocket ────────────────────────────────────────────────────────
+function connectWebSocket() {
+  if (ws && ws.readyState <= 1) return;
+  ws = new WebSocket(WS_URL);
+  setWsState("", "Đang kết nối…");
+
+  ws.onopen = () => {
+    setWsState("connected", "Đã kết nối");
+    log("WebSocket kết nối thành công.", "log-info");
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  ws.onclose = (ev) => {
+    setWsState("disconnected", "Mất kết nối");
+    setStreamState(false);
+    if (!isUserStop) {
+      log(`Mất kết nối (code ${ev.code}). Thử lại sau ${RECONNECT_DELAY/1000}s…`, "log-warn");
+      reconnectTimer = setTimeout(connectWebSocket, RECONNECT_DELAY);
+    }
+  };
+
+  ws.onerror = () => log("Lỗi WebSocket.", "log-warn");
+
+  ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data));
+}
+
+// ── Handle incoming message ───────────────────────────────────────────────────
+function handleMessage(data) {
+  if (data.error) {
+    log("⚠ " + data.error, "log-warn");
+    return;
+  }
+  if (data.done) {
+    log("✅ Hoàn tất stream tín hiệu.", "log-info");
+    setStreamState(false);
+    streamBadge.textContent = "DONE";
+    streamBadge.style.background = "rgba(34,197,94,.15)";
+    streamBadge.style.color = "#22c55e";
+    return;
+  }
+
+  // ── Append samples to chart buffer ────────────────────────────────────────
+  const chunk = data.signal || [];
+  ecgBuffer.push(...chunk);
+  if (ecgBuffer.length > MAX_POINTS) {
+    ecgBuffer = ecgBuffer.slice(ecgBuffer.length - MAX_POINTS);
+  }
+  samplesStreamed += chunk.length;
+
+  // ── Update chart ──────────────────────────────────────────────────────────
+  const labels = ecgBuffer.map((_, i) => i);
+  ecgChart.data.labels   = labels;
+  ecgChart.data.datasets[0].data = ecgBuffer;
+  // Adjust dataset color based on current prediction
+  const isAbnormal = data.prediction === "Abnormal";
+  ecgChart.data.datasets[0].borderColor = isAbnormal ? "#ef4444" : "#22c55e";
+  ecgChart.data.datasets[0].fill.above  = isAbnormal
+    ? "rgba(239,68,68,0.05)" : "rgba(34,197,94,0.04)";
+  ecgChart.update("quiet");
+
+  // ── Update stats ──────────────────────────────────────────────────────────
+  const ratioPercent = Math.round((data.abnormal_ratio ?? 0) * 100);
+  const confPercent  = Math.round((data.confidence   ?? 0) * 100);
+
+  samplesValue.textContent = samplesStreamed.toLocaleString("vi-VN");
+  confValue.textContent    = confPercent + " %";
+  ratioValue.textContent   = ratioPercent + " %";
+
+  // Prediction badge
+  predValue.className = "stat-value " + (isAbnormal ? "abnormal" : "normal");
+  predValue.textContent = isAbnormal ? "Bất thường" : "Bình thường";
+  predCard.className = "stat-card h-100 " + (isAbnormal ? "abnormal" : "normal");
+
+  // Abnormal ratio bar
+  const barColor = ratioPercent > 20 ? "var(--red)" : "var(--green)";
+  ratioFill.style.width       = ratioPercent + "%";
+  ratioFill.style.background  = barColor;
+  ratioPctLabel.textContent   = ratioPercent + " %";
+  ratioPctLabel.style.color   = barColor;
+
+  // Progress bar
+  if (totalSamples > 0) {
+    const pct = Math.min(100, Math.round(samplesStreamed / totalSamples * 100));
+    progressFill.style.width  = pct + "%";
+    progressPct.textContent   = pct + " %";
+  }
+
+  // Log significant events
+  if (data.prediction) {
+    const cls = isAbnormal ? "log-abnormal" : "log-normal";
+    log(`prediction=${data.prediction}  confidence=${confPercent}%  abnormal_ratio=${ratioPercent}%`, cls);
+  }
+}
+
+// ── Stream state ──────────────────────────────────────────────────────────────
+function setStreamState(active) {
+  streamActive = active;
+  btnStart.disabled = active;
+  btnStop.disabled  = !active;
+  if (active) {
+    setWsState("streaming", "Đang stream…");
+    streamBadge.textContent = "LIVE";
+    streamBadge.style.background = "rgba(239,68,68,.2)";
+    streamBadge.style.color = "#ef4444";
+  } else {
+    if (ws && ws.readyState === 1) setWsState("connected", "Đã kết nối");
+  }
+}
+
+// ── File input ────────────────────────────────────────────────────────────────
+document.getElementById("ecgFileInput").addEventListener("change", function () {
+  const file = this.files[0];
+  if (!file) return;
+  fileNameDisp.textContent = "📄 " + file.name;
+  log("Đã chọn file: " + file.name, "log-info");
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.trim().split("\n");
+    rawSignal = lines
+      .map(l => parseFloat(l.split(",")[0]))
+      .filter(v => !isNaN(v));
+    totalSamples = rawSignal.length;
+    log(`Đã đọc ${totalSamples} mẫu từ CSV.`, "log-info");
+    btnStart.disabled = !(ws && ws.readyState === 1);
+    samplesStreamed = 0;
+    ecgBuffer = [];
+    progressFill.style.width = "0%";
+    progressPct.textContent  = "0 %";
+  };
+  reader.readAsText(file);
+});
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const uploadZone = $("upload-zone");
+["dragenter","dragover"].forEach(e => uploadZone.addEventListener(e, ev => {
+  ev.preventDefault(); uploadZone.classList.add("drag-over");
+}));
+["dragleave","drop"].forEach(e => uploadZone.addEventListener(e, ev => {
+  ev.preventDefault(); uploadZone.classList.remove("drag-over");
+}));
+uploadZone.addEventListener("drop", ev => {
+  const file = ev.dataTransfer.files[0];
+  if (file) { $("ecgFileInput").files = ev.dataTransfer.files; $("ecgFileInput").dispatchEvent(new Event("change")); }
+});
+
+// ── Start / Stop ──────────────────────────────────────────────────────────────
+btnStart.addEventListener("click", () => {
+  if (!rawSignal || rawSignal.length === 0) {
+    log("Chưa chọn file ECG.", "log-warn"); return;
+  }
+  if (!ws || ws.readyState !== 1) {
+    log("WebSocket chưa kết nối.", "log-warn"); return;
+  }
+  samplesStreamed = 0;
+  ecgBuffer = [];
+  setStreamState(true);
+  log(`Bắt đầu gửi ${rawSignal.length} mẫu qua WebSocket…`, "log-info");
+  ws.send(JSON.stringify({ signal: Array.from(rawSignal) }));
+});
+
+btnStop.addEventListener("click", () => {
+  isUserStop = true;
+  if (ws) ws.close();
+  setStreamState(false);
+  setWsState("disconnected", "Đã dừng");
+  streamBadge.textContent = "STOPPED";
+  streamBadge.style.background = "rgba(148,163,184,.1)";
+  streamBadge.style.color = "var(--text-muted)";
+  log("Đã dừng stream theo yêu cầu.", "log-warn");
+
+  // Reconnect after a moment so user can start again
+  setTimeout(() => { isUserStop = false; connectWebSocket(); }, 1500);
+});
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+connectWebSocket();
+</script>
