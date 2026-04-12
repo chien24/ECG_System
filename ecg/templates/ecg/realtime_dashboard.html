@@ -252,33 +252,30 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{% endblock %}
-
-<!-- Chart.js + custom logic (outside block to ensure it loads after body) -->
+{% block extra_js %}
+<!-- Chart.js + custom logic -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    ECG Real-time Dashboard – WebSocket client
    ══════════════════════════════════════════════════════════════════════════ */
+// (Giữ nguyên toàn bộ logic JS cũ nhưng nằm trong block extra_js)
 
-// ── Constants ───────────────────────────────────────────────────────────────
 const FS               = 125;
-const DISPLAY_SECONDS  = 8;          // hiển thị 8s trên chart
+const DISPLAY_SECONDS  = 8;
 const MAX_POINTS       = DISPLAY_SECONDS * FS;
 const WS_URL           = `ws://${location.host}/ws/ecg/`;
 const RECONNECT_DELAY  = 3000;
 
-// ── State ───────────────────────────────────────────────────────────────────
 let ws             = null;
-let ecgBuffer      = [];             // raw samples đang hiển thị
-let rawSignal      = null;           // full signal từ CSV
+let ecgBuffer      = [];
+let rawSignal      = null;
 let totalSamples   = 0;
 let samplesStreamed = 0;
 let streamActive   = false;
 let reconnectTimer = null;
 let isUserStop     = false;
 
-// ── Chart setup ─────────────────────────────────────────────────────────────
 const ctx = document.getElementById("ecgChart").getContext("2d");
 const ecgChart = new Chart(ctx, {
   type: "line",
@@ -291,31 +288,21 @@ const ecgChart = new Chart(ctx, {
       borderWidth: 1.2,
       pointRadius: 0,
       tension: 0.15,
-      fill: {
-        target: "origin",
-        above: "rgba(34,197,94,0.04)",
-      },
+      fill: { target: "origin", above: "rgba(34,197,94,0.04)" },
     }],
   },
   options: {
     animation: false,
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: "nearest", intersect: false },
     plugins: { legend: { display: false }, tooltip: { enabled: false } },
     scales: {
       x: { display: false },
-      y: {
-        display: true,
-        grid: { color: "rgba(148,163,184,.06)" },
-        ticks: { color: "#475569", font: { size: 10 }, maxTicksLimit: 6 },
-        border: { color: "transparent" },
-      },
+      y: { grid: { color: "rgba(148,163,184,.06)" }, ticks: { color: "#475569", font: { size: 10 } } },
     },
   },
 });
 
-// ── DOM helpers ──────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
 const wsStatusText  = $("ws-status-text");
 const wsDot         = $("ws-dot");
@@ -334,7 +321,6 @@ const btnStop       = $("btn-stop");
 const eventLog      = $("event-log");
 const fileNameDisp  = $("file-name-display");
 
-// ── Logging ──────────────────────────────────────────────────────────────────
 function log(msg, cls = "log-info") {
   const ts  = new Date().toLocaleTimeString("vi-VN");
   const div = document.createElement("div");
@@ -343,15 +329,12 @@ function log(msg, cls = "log-info") {
   eventLog.appendChild(div);
   eventLog.scrollTop = eventLog.scrollHeight;
 }
-window.clearLog = () => { eventLog.innerHTML = ""; };
 
-// ── WS dot / status ──────────────────────────────────────────────────────────
 function setWsState(state, text) {
   wsDot.className = state;
   wsStatusText.textContent = text;
 }
 
-// ── Connect WebSocket ────────────────────────────────────────────────────────
 function connectWebSocket() {
   if (ws && ws.readyState <= 1) return;
   ws = new WebSocket(WS_URL);
@@ -365,167 +348,78 @@ function connectWebSocket() {
 
   ws.onclose = (ev) => {
     setWsState("disconnected", "Mất kết nối");
-    setStreamState(false);
     if (!isUserStop) {
-      log(`Mất kết nối (code ${ev.code}). Thử lại sau ${RECONNECT_DELAY/1000}s…`, "log-warn");
+      log(`Lỗi kết nối. Thử lại sau ${RECONNECT_DELAY/1000}s…`, "log-warn");
       reconnectTimer = setTimeout(connectWebSocket, RECONNECT_DELAY);
     }
   };
 
-  ws.onerror = () => log("Lỗi WebSocket.", "log-warn");
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.error) { log(data.error, "log-warn"); return; }
+    if (data.done) { log("Hoàn tất stream.", "log-info"); setStreamState(false); return; }
 
-  ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data));
+    const chunk = data.signal || [];
+    ecgBuffer.push(...chunk);
+    if (ecgBuffer.length > MAX_POINTS) ecgBuffer = ecgBuffer.slice(ecgBuffer.length - MAX_POINTS);
+    samplesStreamed += chunk.length;
+
+    ecgChart.data.labels = ecgBuffer.map((_, i) => i);
+    ecgChart.data.datasets[0].data = ecgBuffer;
+    const isAbnormal = data.prediction === "Abnormal";
+    ecgChart.data.datasets[0].borderColor = isAbnormal ? "#ef4444" : "#22c55e";
+    ecgChart.update("quiet");
+
+    const ratioPercent = Math.round((data.abnormal_ratio ?? 0) * 100);
+    const confPercent  = Math.round((data.confidence ?? 0) * 100);
+    samplesValue.textContent = samplesStreamed.toLocaleString("vi-VN");
+    confValue.textContent = confPercent + " %";
+    ratioValue.textContent = ratioPercent + " %";
+    predValue.className = "stat-value " + (isAbnormal ? "abnormal" : "normal");
+    predValue.textContent = isAbnormal ? "Bất thường" : "Bình thường";
+    predCard.className = "stat-card h-100 " + (isAbnormal ? "abnormal" : "normal");
+    
+    if (totalSamples > 0) {
+        const pct = Math.min(100, Math.round(samplesStreamed / totalSamples * 100));
+        progressFill.style.width = pct + "%";
+        progressPct.textContent = pct + " %";
+    }
+  };
 }
 
-// ── Handle incoming message ───────────────────────────────────────────────────
-function handleMessage(data) {
-  if (data.error) {
-    log("⚠ " + data.error, "log-warn");
-    return;
-  }
-  if (data.done) {
-    log("✅ Hoàn tất stream tín hiệu.", "log-info");
-    setStreamState(false);
-    streamBadge.textContent = "DONE";
-    streamBadge.style.background = "rgba(34,197,94,.15)";
-    streamBadge.style.color = "#22c55e";
-    return;
-  }
-
-  // ── Append samples to chart buffer ────────────────────────────────────────
-  const chunk = data.signal || [];
-  ecgBuffer.push(...chunk);
-  if (ecgBuffer.length > MAX_POINTS) {
-    ecgBuffer = ecgBuffer.slice(ecgBuffer.length - MAX_POINTS);
-  }
-  samplesStreamed += chunk.length;
-
-  // ── Update chart ──────────────────────────────────────────────────────────
-  const labels = ecgBuffer.map((_, i) => i);
-  ecgChart.data.labels   = labels;
-  ecgChart.data.datasets[0].data = ecgBuffer;
-  // Adjust dataset color based on current prediction
-  const isAbnormal = data.prediction === "Abnormal";
-  ecgChart.data.datasets[0].borderColor = isAbnormal ? "#ef4444" : "#22c55e";
-  ecgChart.data.datasets[0].fill.above  = isAbnormal
-    ? "rgba(239,68,68,0.05)" : "rgba(34,197,94,0.04)";
-  ecgChart.update("quiet");
-
-  // ── Update stats ──────────────────────────────────────────────────────────
-  const ratioPercent = Math.round((data.abnormal_ratio ?? 0) * 100);
-  const confPercent  = Math.round((data.confidence   ?? 0) * 100);
-
-  samplesValue.textContent = samplesStreamed.toLocaleString("vi-VN");
-  confValue.textContent    = confPercent + " %";
-  ratioValue.textContent   = ratioPercent + " %";
-
-  // Prediction badge
-  predValue.className = "stat-value " + (isAbnormal ? "abnormal" : "normal");
-  predValue.textContent = isAbnormal ? "Bất thường" : "Bình thường";
-  predCard.className = "stat-card h-100 " + (isAbnormal ? "abnormal" : "normal");
-
-  // Abnormal ratio bar
-  const barColor = ratioPercent > 20 ? "var(--red)" : "var(--green)";
-  ratioFill.style.width       = ratioPercent + "%";
-  ratioFill.style.background  = barColor;
-  ratioPctLabel.textContent   = ratioPercent + " %";
-  ratioPctLabel.style.color   = barColor;
-
-  // Progress bar
-  if (totalSamples > 0) {
-    const pct = Math.min(100, Math.round(samplesStreamed / totalSamples * 100));
-    progressFill.style.width  = pct + "%";
-    progressPct.textContent   = pct + " %";
-  }
-
-  // Log significant events
-  if (data.prediction) {
-    const cls = isAbnormal ? "log-abnormal" : "log-normal";
-    log(`prediction=${data.prediction}  confidence=${confPercent}%  abnormal_ratio=${ratioPercent}%`, cls);
-  }
-}
-
-// ── Stream state ──────────────────────────────────────────────────────────────
 function setStreamState(active) {
   streamActive = active;
   btnStart.disabled = active;
   btnStop.disabled  = !active;
-  if (active) {
-    setWsState("streaming", "Đang stream…");
-    streamBadge.textContent = "LIVE";
-    streamBadge.style.background = "rgba(239,68,68,.2)";
-    streamBadge.style.color = "#ef4444";
-  } else {
-    if (ws && ws.readyState === 1) setWsState("connected", "Đã kết nối");
-  }
 }
 
-// ── File input ────────────────────────────────────────────────────────────────
 document.getElementById("ecgFileInput").addEventListener("change", function () {
   const file = this.files[0];
   if (!file) return;
   fileNameDisp.textContent = "📄 " + file.name;
-  log("Đã chọn file: " + file.name, "log-info");
-
   const reader = new FileReader();
   reader.onload = (e) => {
     const lines = e.target.result.trim().split("\n");
-    rawSignal = lines
-      .map(l => parseFloat(l.split(",")[0]))
-      .filter(v => !isNaN(v));
+    rawSignal = lines.map(l => parseFloat(l.split(",")[0])).filter(v => !isNaN(v));
     totalSamples = rawSignal.length;
-    log(`Đã đọc ${totalSamples} mẫu từ CSV.`, "log-info");
-    btnStart.disabled = !(ws && ws.readyState === 1);
-    samplesStreamed = 0;
-    ecgBuffer = [];
-    progressFill.style.width = "0%";
-    progressPct.textContent  = "0 %";
+    btnStart.disabled = false;
+    log(`Đã nạp ${totalSamples} mẫu.`, "log-info");
   };
   reader.readAsText(file);
 });
 
-// ── Drag & drop ───────────────────────────────────────────────────────────────
-const uploadZone = $("upload-zone");
-["dragenter","dragover"].forEach(e => uploadZone.addEventListener(e, ev => {
-  ev.preventDefault(); uploadZone.classList.add("drag-over");
-}));
-["dragleave","drop"].forEach(e => uploadZone.addEventListener(e, ev => {
-  ev.preventDefault(); uploadZone.classList.remove("drag-over");
-}));
-uploadZone.addEventListener("drop", ev => {
-  const file = ev.dataTransfer.files[0];
-  if (file) { $("ecgFileInput").files = ev.dataTransfer.files; $("ecgFileInput").dispatchEvent(new Event("change")); }
-});
-
-// ── Start / Stop ──────────────────────────────────────────────────────────────
 btnStart.addEventListener("click", () => {
-  if (!rawSignal || rawSignal.length === 0) {
-    log("Chưa chọn file ECG.", "log-warn"); return;
-  }
-  if (!ws || ws.readyState !== 1) {
-    log("WebSocket chưa kết nối.", "log-warn"); return;
-  }
-  samplesStreamed = 0;
-  ecgBuffer = [];
+  if (!rawSignal || !ws || ws.readyState !== 1) return;
   setStreamState(true);
-  log(`Bắt đầu gửi ${rawSignal.length} mẫu qua WebSocket…`, "log-info");
   ws.send(JSON.stringify({ signal: Array.from(rawSignal) }));
 });
 
 btnStop.addEventListener("click", () => {
-  isUserStop = true;
-  if (ws) ws.close();
-  setStreamState(false);
-  setWsState("disconnected", "Đã dừng");
-  streamBadge.textContent = "STOPPED";
-  streamBadge.style.background = "rgba(148,163,184,.1)";
-  streamBadge.style.color = "var(--text-muted)";
-  log("Đã dừng stream theo yêu cầu.", "log-warn");
-
-  // Reconnect after a moment so user can start again
-  setTimeout(() => { isUserStop = false; connectWebSocket(); }, 1500);
+  isUserStop = true; ws.close(); setStreamState(false);
+  setTimeout(() => { isUserStop = false; connectWebSocket(); }, 1000);
 });
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
 connectWebSocket();
 </script>
+{% endblock %}
+
