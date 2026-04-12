@@ -31,15 +31,25 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # Phải ở trên cùng
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'users',  # Đặt trước ecg vì ecg.User phụ thuộc vào users.User
+    'channels',
+    'users',
     'ecg',
 ]
+
+ASGI_APPLICATION = 'ecg_system.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 # Đăng nhập / đăng xuất
 LOGIN_REDIRECT_URL = 'ecg:home'
