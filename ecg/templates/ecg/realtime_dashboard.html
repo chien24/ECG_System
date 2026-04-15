@@ -173,6 +173,14 @@
       <span class="stat-sub">fs = 125 Hz</span>
     </div>
   </div>
+  <!-- Latency -->
+  <div class="col-6 col-md-3">
+    <div class="stat-card h-100">
+      <span class="stat-label">Latency suy diễn</span>
+      <span class="stat-value" id="latency-value" style="color:var(--amber)">– ms</span>
+      <span class="stat-sub">Thời gian model / chunk</span>
+    </div>
+  </div>
 </div>
 
 <!-- ── Row 2: Chart + Controls ───────────────────────────────────────────── -->
@@ -253,29 +261,40 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Chart.js + custom logic -->
+<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   ECG Real-time Dashboard – WebSocket client
+   ECG Real-time Dashboard – True Streaming Client
+   ─────────────────────────────────────────────────────────────────────────
+   Kiến trúc mới:
+   • Frontend kiểm soát timing: gửi 1 chunk nhỏ mỗi (CHUNK_SIZE/FS * 1000) ms
+   • Backend xử lý từng chunk ngay lập tức, không sleep
    ══════════════════════════════════════════════════════════════════════════ */
-// (Giữ nguyên toàn bộ logic JS cũ nhưng nằm trong block extra_js)
 
-const FS               = 125;
-const DISPLAY_SECONDS  = 8;
-const MAX_POINTS       = DISPLAY_SECONDS * FS;
-const WS_URL           = `ws://${location.host}/ws/ecg/`;
-const RECONNECT_DELAY  = 3000;
+// ── Hằng số ──────────────────────────────────────────────────────────────────
+const FS              = 125;                          // Hz
+const CHUNK_SIZE      = 25;                           // mẫu / lần gửi (~0.2s)
+const CHUNK_INTERVAL  = (CHUNK_SIZE / FS) * 1000;     // ms giữa 2 chunk (200ms)
+const DISPLAY_SECONDS = 8;
+const MAX_POINTS      = DISPLAY_SECONDS * FS;
+const WS_URL          = `ws://${location.host}/ws/ecg/`;
+const RECONNECT_DELAY = 3000;
 
-let ws             = null;
-let ecgBuffer      = [];
-let rawSignal      = null;
-let totalSamples   = 0;
-let samplesStreamed = 0;
-let streamActive   = false;
-let reconnectTimer = null;
-let isUserStop     = false;
+// ── Trạng thái ────────────────────────────────────────────────────────────────
+let ws              = null;
+let ecgBuffer       = [];
+let rawSignal       = null;
+let totalSamples    = 0;
+let chunkIndex      = 0;    // con trỏ vào rawSignal
+let samplesStreamed  = 0;
+let streamActive    = false;
+let streamTimer     = null; // setInterval handle
+let reconnectTimer  = null;
+let isUserStop      = false;
+let lastPrediction  = null; // giữ prediction gần nhất để echo khi chưa đủ STEP
 
+// ── Chart.js ──────────────────────────────────────────────────────────────────
 const ctx = document.getElementById("ecgChart").getContext("2d");
 const ecgChart = new Chart(ctx, {
   type: "line",
@@ -303,7 +322,8 @@ const ecgChart = new Chart(ctx, {
   },
 });
 
-const $  = id => document.getElementById(id);
+// ── DOM shortcuts ─────────────────────────────────────────────────────────────
+const $             = id => document.getElementById(id);
 const wsStatusText  = $("ws-status-text");
 const wsDot         = $("ws-dot");
 const predCard      = $("pred-card");
@@ -320,7 +340,9 @@ const btnStart      = $("btn-start");
 const btnStop       = $("btn-stop");
 const eventLog      = $("event-log");
 const fileNameDisp  = $("file-name-display");
+const latencyEl     = document.getElementById("latency-value");
 
+// ── Logging ───────────────────────────────────────────────────────────────────
 function log(msg, cls = "log-info") {
   const ts  = new Date().toLocaleTimeString("vi-VN");
   const div = document.createElement("div");
@@ -330,11 +352,24 @@ function log(msg, cls = "log-info") {
   eventLog.scrollTop = eventLog.scrollHeight;
 }
 
+// ── WebSocket state UI ────────────────────────────────────────────────────────
 function setWsState(state, text) {
   wsDot.className = state;
   wsStatusText.textContent = text;
 }
 
+function setStreamState(active) {
+  streamActive = active;
+  btnStart.disabled = active || !rawSignal;
+  btnStop.disabled  = !active;
+  streamBadge.textContent = active ? "STREAMING" : "IDLE";
+  streamBadge.style.background = active ? "rgba(56,189,248,.2)" : "rgba(148,163,184,.15)";
+  streamBadge.style.color = active ? "#38bdf8" : "var(--text-muted)";
+  if (active) setWsState("streaming", "Đang stream…");
+  else        setWsState("connected", "Đã kết nối");
+}
+
+// ── WebSocket kết nối ─────────────────────────────────────────────────────────
 function connectWebSocket() {
   if (ws && ws.readyState <= 1) return;
   ws = new WebSocket(WS_URL);
@@ -344,55 +379,112 @@ function connectWebSocket() {
     setWsState("connected", "Đã kết nối");
     log("WebSocket kết nối thành công.", "log-info");
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    btnStart.disabled = !rawSignal;
   };
 
-  ws.onclose = (ev) => {
+  ws.onclose = () => {
     setWsState("disconnected", "Mất kết nối");
+    _stopStreamTimer();
     if (!isUserStop) {
-      log(`Lỗi kết nối. Thử lại sau ${RECONNECT_DELAY/1000}s…`, "log-warn");
+      log(`Mất kết nối. Thử lại sau ${RECONNECT_DELAY / 1000}s…`, "log-warn");
       reconnectTimer = setTimeout(connectWebSocket, RECONNECT_DELAY);
     }
   };
 
+  ws.onerror = () => log("Lỗi WebSocket.", "log-warn");
+
+  // ── Nhận kết quả từ backend ────────────────────────────────────────────────
   ws.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
-    if (data.error) { log(data.error, "log-warn"); return; }
-    if (data.done) { log("Hoàn tất stream.", "log-info"); setStreamState(false); return; }
+
+    if (data.error)   { log(data.error, "log-warn"); return; }
+    if (data.stopped) { log("Server xác nhận dừng.", "log-info"); return; }
 
     const chunk = data.signal || [];
+    if (!chunk.length) return;
+
+    // ── Cập nhật chart (luôn chạy dù chưa có prediction) ──────────────────
     ecgBuffer.push(...chunk);
-    if (ecgBuffer.length > MAX_POINTS) ecgBuffer = ecgBuffer.slice(ecgBuffer.length - MAX_POINTS);
+    if (ecgBuffer.length > MAX_POINTS) ecgBuffer = ecgBuffer.slice(-MAX_POINTS);
     samplesStreamed += chunk.length;
 
     ecgChart.data.labels = ecgBuffer.map((_, i) => i);
-    ecgChart.data.datasets[0].data = ecgBuffer;
-    const isAbnormal = data.prediction === "Abnormal";
+    ecgChart.data.datasets[0].data = [...ecgBuffer];
+
+    // Dùng prediction cuối nếu backend chưa trả về (chưa đủ STEP_SIZE)
+    if (data.prediction) lastPrediction = data;
+    const p = lastPrediction;
+    const isAbnormal = p?.prediction === "Abnormal";
     ecgChart.data.datasets[0].borderColor = isAbnormal ? "#ef4444" : "#22c55e";
     ecgChart.update("quiet");
 
-    const ratioPercent = Math.round((data.abnormal_ratio ?? 0) * 100);
-    const confPercent  = Math.round((data.confidence ?? 0) * 100);
-    samplesValue.textContent = samplesStreamed.toLocaleString("vi-VN");
-    confValue.textContent = confPercent + " %";
-    ratioValue.textContent = ratioPercent + " %";
-    predValue.className = "stat-value " + (isAbnormal ? "abnormal" : "normal");
-    predValue.textContent = isAbnormal ? "Bất thường" : "Bình thường";
-    predCard.className = "stat-card h-100 " + (isAbnormal ? "abnormal" : "normal");
-    
+    // ── Cập nhật stat cards khi có prediction mới ──────────────────────────
+    if (data.prediction) {
+      const ratioPercent = Math.round((data.abnormal_ratio ?? 0) * 100);
+      const confPercent  = Math.round((data.confidence ?? 0) * 100);
+
+      samplesValue.textContent = samplesStreamed.toLocaleString("vi-VN");
+      confValue.textContent    = confPercent  + " %";
+      ratioValue.textContent   = ratioPercent + " %";
+      predValue.className  = "stat-value " + (isAbnormal ? "abnormal" : "normal");
+      predValue.textContent = isAbnormal ? "Bất thường" : "Bình thường";
+      predCard.className   = "stat-card h-100 " + (isAbnormal ? "abnormal" : "normal");
+
+      const ratioColor = ratioPercent > 20 ? "var(--red)" : "var(--green)";
+      ratioFill.style.width      = Math.min(ratioPercent, 100) + "%";
+      ratioFill.style.background = ratioColor;
+      ratioPctLabel.textContent  = ratioPercent + " %";
+
+      if (latencyEl && data.latency_ms != null)
+        latencyEl.textContent = data.latency_ms + " ms";
+
+      // Log bất thường
+      if (isAbnormal)
+        log(`⚠️ Bất thường – ratio ${ratioPercent}%, confidence ${confPercent}%`, "log-abnormal");
+    } else {
+      samplesValue.textContent = samplesStreamed.toLocaleString("vi-VN");
+    }
+
+    // ── Progress bar ──────────────────────────────────────────────────────
     if (totalSamples > 0) {
-        const pct = Math.min(100, Math.round(samplesStreamed / totalSamples * 100));
-        progressFill.style.width = pct + "%";
-        progressPct.textContent = pct + " %";
+      const pct = Math.min(100, Math.round(chunkIndex / totalSamples * 100));
+      progressFill.style.width = pct + "%";
+      progressPct.textContent  = pct + " %";
     }
   };
 }
 
-function setStreamState(active) {
-  streamActive = active;
-  btnStart.disabled = active;
-  btnStop.disabled  = !active;
+// ── Streaming: gửi chunk theo setInterval ─────────────────────────────────────
+function _sendNextChunk() {
+  if (!streamActive || !ws || ws.readyState !== WebSocket.OPEN) {
+    _stopStreamTimer();
+    return;
+  }
+
+  if (chunkIndex >= totalSamples) {
+    // Hết dữ liệu
+    log("✅ Đã stream xong toàn bộ dữ liệu.", "log-info");
+    _stopStreamTimer();
+    setStreamState(false);
+    return;
+  }
+
+  const chunk = rawSignal.slice(chunkIndex, chunkIndex + CHUNK_SIZE);
+  chunkIndex += chunk.length;
+
+  ws.send(JSON.stringify({ chunk: Array.from(chunk) }));
 }
 
+function _startStreamTimer() {
+  if (streamTimer) clearInterval(streamTimer);
+  streamTimer = setInterval(_sendNextChunk, CHUNK_INTERVAL);
+}
+
+function _stopStreamTimer() {
+  if (streamTimer) { clearInterval(streamTimer); streamTimer = null; }
+}
+
+// ── File input ────────────────────────────────────────────────────────────────
 document.getElementById("ecgFileInput").addEventListener("change", function () {
   const file = this.files[0];
   if (!file) return;
@@ -400,25 +492,52 @@ document.getElementById("ecgFileInput").addEventListener("change", function () {
   const reader = new FileReader();
   reader.onload = (e) => {
     const lines = e.target.result.trim().split("\n");
-    rawSignal = lines.map(l => parseFloat(l.split(",")[0])).filter(v => !isNaN(v));
+    rawSignal    = lines.map(l => parseFloat(l.split(",")[0])).filter(v => !isNaN(v));
     totalSamples = rawSignal.length;
-    btnStart.disabled = false;
-    log(`Đã nạp ${totalSamples} mẫu.`, "log-info");
+    btnStart.disabled = !ws || ws.readyState !== WebSocket.OPEN;
+    log(`Đã nạp ${totalSamples.toLocaleString("vi-VN")} mẫu (≈ ${(totalSamples/FS).toFixed(1)}s).`, "log-info");
   };
   reader.readAsText(file);
 });
 
+// ── Nút Start ─────────────────────────────────────────────────────────────────
 btnStart.addEventListener("click", () => {
-  if (!rawSignal || !ws || ws.readyState !== 1) return;
+  if (!rawSignal || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+  // Reset trạng thái streaming
+  chunkIndex     = 0;
+  samplesStreamed = 0;
+  ecgBuffer      = [];
+  lastPrediction = null;
+  ecgChart.data.labels             = [];
+  ecgChart.data.datasets[0].data   = [];
+  ecgChart.data.datasets[0].borderColor = "#22c55e";
+  ecgChart.update("quiet");
+  progressFill.style.width = "0%";
+  progressPct.textContent  = "0 %";
+
   setStreamState(true);
-  ws.send(JSON.stringify({ signal: Array.from(rawSignal) }));
+  log(`▶ Bắt đầu stream ${totalSamples.toLocaleString("vi-VN")} mẫu @ chunk ${CHUNK_SIZE} / ${CHUNK_INTERVAL}ms.`, "log-info");
+  _startStreamTimer();
 });
 
+// ── Nút Stop ──────────────────────────────────────────────────────────────────
 btnStop.addEventListener("click", () => {
-  isUserStop = true; ws.close(); setStreamState(false);
-  setTimeout(() => { isUserStop = false; connectWebSocket(); }, 1000);
+  _stopStreamTimer();
+  setStreamState(false);
+  isUserStop = true;
+
+  // Thông báo backend reset buffer
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ stop: true }));
+  }
+  log("⏹ Đã dừng streaming.", "log-warn");
+  setTimeout(() => { isUserStop = false; }, 500);
 });
 
+function clearLog() { eventLog.innerHTML = ""; }
+
+// ── Khởi động ─────────────────────────────────────────────────────────────────
 connectWebSocket();
 </script>
 {% endblock %}
