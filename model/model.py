@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
@@ -8,6 +9,9 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn.utils.class_weight import compute_class_weight
 from scipy.signal import butter, filtfilt, find_peaks
 from scipy.interpolate import interp1d
+
+# Thư mục chứa file model.py này (cross-platform: hoạt động cả Windows lẫn Linux/Docker)
+_MODEL_DIR = Path(__file__).resolve().parent
 
 # Mô hình phân loại ECG
 class ResidualBlock1D(nn.Module):
@@ -143,7 +147,10 @@ print(f"Using device: {device}")
 # Khởi tạo mô hình
 try:
     model = ECG_CNN(num_classes=5).to(device)
-    ckpt = torch.load(r".\model\best_epoch_5_loss_0.1693.pth", map_location=torch.device('cpu'))
+    # Dùng path tuyệt đối dựa theo vị trí file model.py
+    # → hoạt động đúng cả trên Windows (local) lẫn Linux (Docker)
+    ckpt_path = _MODEL_DIR / "best_epoch_5_loss_0.1693.pth"
+    ckpt = torch.load(str(ckpt_path), map_location=torch.device('cpu'))
 
     model.load_state_dict(ckpt["model_state"])
 except Exception as e:

@@ -1,0 +1,50 @@
+# ── Git ────────────────────────────────────────────────────────────────────────
+.git
+.gitignore
+.github
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+env/
+venv/
+.venv/
+ENV/
+
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+*.env
+
+# ── Jupyter / Notebooks ────────────────────────────────────────────────────────
+# (Không cần đưa vào Docker image production)
+**/*.ipynb
+.ipynb_checkpoints
+
+# ── Django runtime files ───────────────────────────────────────────────────────
+db.sqlite3
+media/
+uploads/
+staticfiles/
+
+# ── Docker files bản thân ──────────────────────────────────────────────────────
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ── Editor & IDE ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── Misc ───────────────────────────────────────────────────────────────────────
+*.log
+*.bak
+*.swp
+*.tmp
+node_modules/
+README.md
+DOCKER_GUIDE.md
