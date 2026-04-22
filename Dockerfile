@@ -1,49 +1,66 @@
 # ════════════════════════════════════════════════════════════════
-#  ECG System — Dockerfile tối ưu
+#  ECG System — Production Dockerfile (single container, Render)
 #  Base: python:3.10-slim (Debian Bookworm)
+#  ASGI server: Daphne  |  Static files: WhiteNoise
 # ════════════════════════════════════════════════════════════════
 FROM python:3.10-slim
 
-# ── Biến môi trường ───────────────────────────────────────────
+# ── Build-time metadata ───────────────────────────────────────
+LABEL maintainer="ecg-system" \
+      description="Real-time ECG Analysis System (production)"
+
+# ── Environment variables ─────────────────────────────────────
+# PYTHONDONTWRITEBYTECODE : do not create .pyc files in image
+# PYTHONUNBUFFERED        : stdout/stderr are flushed immediately (visible in Render logs)
+# PIP_NO_CACHE_DIR        : do not store pip download cache in the image layer
+# PIP_DISABLE_PIP_VERSION_CHECK : suppress the version-check noise
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PORT=8000
 
-# ── Thư mục làm việc ──────────────────────────────────────────
+# ── Working directory ─────────────────────────────────────────
 WORKDIR /app
 
 # ── System dependencies ───────────────────────────────────────
-# libgomp1  → cần cho PyTorch / scikit-learn (OpenMP)
-# libpq-dev → cần nếu sau này chuyển sang PostgreSQL
+# libgomp1    → required by PyTorch / scikit-learn (OpenMP threading)
+# libpq-dev   → required by psycopg2 for PostgreSQL support
+# gcc         → required to compile some Python C extensions
+# Clean up apt cache in the same layer to keep the image slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        gcc \
         libgomp1 \
         libpq-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Cài Python dependencies ───────────────────────────────────
-# Copy requirements trước để tận dụng Docker layer cache:
-# Nếu không thay đổi requirements.txt, bước này sẽ được cache lại
+# ── Python dependencies ───────────────────────────────────────
+# Copy requirements first to leverage Docker layer cache:
+# if requirements.txt hasn't changed, pip install is skipped on rebuild
 COPY requirements.txt ./
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# ── Copy source code ──────────────────────────────────────────
-# .dockerignore đã loại trừ: .git, __pycache__, *.ipynb,
-# db.sqlite3, venv/, .env, uploads/, staticfiles/
+# ── Application source code ───────────────────────────────────
+# .dockerignore already excludes: .git, __pycache__, *.pyc,
+# db.sqlite3, .env, venv/, staticfiles/, uploads/
 COPY . .
 
-# ── Tạo non-root user (security best practice) ───────────────
+# ── Non-root user (security best practice) ───────────────────
+# Running as root inside the container is a security risk.
+# Render also recommends non-root containers.
 RUN addgroup --system appgroup && \
     adduser --system --ingroup appgroup appuser && \
     chown -R appuser:appgroup /app
+
 USER appuser
 
-# ── Port ──────────────────────────────────────────────────────
-EXPOSE 8000
+# ── Expose port ───────────────────────────────────────────────
+# Render injects $PORT at runtime; EXPOSE is documentation only
+EXPOSE ${PORT}
 
-# ── Chạy Daphne ASGI server ───────────────────────────────────
-# Bind 0.0.0.0 để Docker port mapping hoạt động
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "ecg_system.asgi:application"]
+# ── Startup script ────────────────────────────────────────────
+# start.sh handles: collectstatic → migrate → daphne
+CMD ["sh", "/app/start.sh"]
