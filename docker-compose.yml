@@ -1,0 +1,31 @@
+services:
+  web:
+    build: .
+    # Chạy collectstatic, migrate, sau đó mới khởi động Daphne
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py migrate --noinput &&
+             daphne -b 0.0.0.0 -p 8000 ecg_system.asgi:application"
+    volumes:
+      - .:/app   # bind mount toàn bộ project → db.sqlite3 tự persist trên host
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=ecg_system.settings
+      - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1 0.0.0.0
+      - USE_REDIS=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
