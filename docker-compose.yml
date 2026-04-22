@@ -8,6 +8,12 @@ services:
              daphne -b 0.0.0.0 -p 8000 ecg_system.asgi:application"
     volumes:
       - .:/app   # bind mount toàn bộ project → db.sqlite3 tự persist trên host
+      # Anonymous volume "shadows" staticfiles/ khỏi bind mount của Windows.
+      # Lý do: WhiteNoise gọi os.utime() trên file .gz trong staticfiles/ —
+      # trên NTFS bind-mount, appuser (non-root) không có quyền set timestamp
+      # → PermissionError: [Errno 1] Operation not permitted.
+      # Volume này cho staticfiles nằm hoàn toàn trong container, appuser có full quyền.
+      - /app/staticfiles
     ports:
       - "8000:8000"
     environment:

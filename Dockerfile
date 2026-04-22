@@ -53,6 +53,12 @@ COPY . .
 # Render also recommends non-root containers.
 RUN addgroup --system appgroup && \
     adduser --system --ingroup appgroup appuser && \
+    # staticfiles/ bị exclude trong .dockerignore nên không tồn tại trong image.
+    # Tạo sẵn thư mục ở đây để Docker "seed" quyền appuser vào anonymous volume
+    # khi docker-compose mount - /app/staticfiles lần đầu tiên.
+    # Nếu không làm bước này, volume sẽ được tạo rỗng và owned by root
+    # → appuser không ghi được → PermissionError khi collectstatic chạy.
+    mkdir -p /app/staticfiles && \
     chown -R appuser:appgroup /app
 
 USER appuser
