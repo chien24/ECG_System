@@ -1,4 +1,4 @@
-# ── Deep Learning ─────────────────────────────────────────────────────────────
+# ── Deep Learning ──────────────────────────────────────────────────────────────
 torch==2.3.1
 torchvision==0.18.1
 torchaudio==2.3.1
@@ -11,7 +11,13 @@ channels-redis==4.3.0
 daphne==4.2.1
 celery==5.6.3
 
-# ── Data Science ───────────────────────────────────────────────────────────────
+# ── Database ────────────────────────────────────────────────────────────────────
+# psycopg2-binary : PostgreSQL adapter (binary wheel, no local libpq compile needed)
+# dj-database-url : parse DATABASE_URL into Django DATABASES dict
+psycopg2-binary==2.9.9
+dj-database-url==2.1.0
+
+# ── Data Science ────────────────────────────────────────────────────────────────
 numpy==1.26.4
 pandas==2.2.2
 scikit-learn==1.5.2
@@ -19,8 +25,11 @@ scipy==1.13.1
 matplotlib==3.8.4
 seaborn==0.13.2
 
-# ── Utilities ──────────────────────────────────────────────────────────────────
+# ── Static files ────────────────────────────────────────────────────────────────
+# whitenoise : serve compressed, versioned static files from Django process
+whitenoise==6.9.0
+
+# ── Utilities ───────────────────────────────────────────────────────────────────
 tqdm==4.66.4
 requests==2.33.1
 python-dotenv==1.2.2
-whitenoise==6.9.0
