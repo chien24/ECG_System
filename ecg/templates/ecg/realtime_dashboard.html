@@ -278,7 +278,8 @@ const CHUNK_SIZE      = 25;                           // mẫu / lần gửi (~0
 const CHUNK_INTERVAL  = (CHUNK_SIZE / FS) * 1000;     // ms giữa 2 chunk (200ms)
 const DISPLAY_SECONDS = 8;
 const MAX_POINTS      = DISPLAY_SECONDS * FS;
-const WS_URL          = `ws://${location.host}/ws/ecg/`;
+const protocol      = window.location.protocol === "https:" ? "wss" : "ws";
+const WS_URL        = `${protocol}://${location.host}/ws/ecg/`;
 const RECONNECT_DELAY = 3000;
 
 // ── Trạng thái ────────────────────────────────────────────────────────────────
