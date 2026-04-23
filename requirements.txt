@@ -33,3 +33,9 @@ whitenoise==6.9.0
 tqdm==4.66.4
 requests==2.33.1
 python-dotenv==1.2.2
+
+# ── Testing ─────────────────────────────────────────────────────────────────────
+pytest
+pytest-django
+pytest-asyncio
+pytest-cov
