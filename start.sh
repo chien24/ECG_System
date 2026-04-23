@@ -34,11 +34,24 @@ python manage.py migrate --noinput
 #      DJANGO_SUPERUSER_EMAIL     – e.g. "admin@example.com"
 #      DJANGO_SUPERUSER_PASSWORD  – a strong password
 #
-#    Idempotency: if the superuser already exists, Django exits with code 1.
-#    The "|| true" turns that into success so the container keeps running.
-#    This makes the step completely safe to run on every container restart.
-echo "[3/4] Creating superuser (skipped silently if already exists)..."
-python manage.py createsuperuser --noinput || true
+#    Idempotency: kiểm tra user đã tồn tại chưa trước khi tạo.
+#    Dùng Python one-liner để tránh lỗi "That username is already taken."
+#    xuất hiện trong logs mỗi lần Render restart container.
+echo "[3/4] Creating superuser (skipped if already exists)..."
+python manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+username = __import__('os').environ.get('DJANGO_SUPERUSER_USERNAME', '')
+if username and not User.objects.filter(username=username).exists():
+    User.objects.create_superuser(
+        username=username,
+        email=__import__('os').environ.get('DJANGO_SUPERUSER_EMAIL', ''),
+        password=__import__('os').environ.get('DJANGO_SUPERUSER_PASSWORD', '')
+    )
+    print(f'Superuser \"{username}\" created.')
+else:
+    print(f'Superuser \"{username}\" already exists, skipping.')
+"
 
 # 4. Start Daphne ASGI server
 #    -b 0.0.0.0  → bind all interfaces (required by Render)
