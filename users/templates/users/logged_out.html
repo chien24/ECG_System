@@ -4,7 +4,7 @@
 {% block title %}Đã đăng xuất · Hệ thống phân tích ECG{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'users/styles.css' %}">
+<link rel="stylesheet" href="{% static 'users/css/styles.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -30,9 +30,9 @@
         </div>
     </div>
 </div>
-<script>
-    setTimeout(function () {
-        window.location.href = "{% url 'ecg:home' %}";
-    }, 3000);
-</script>
+<div id="logged-out-redirect" data-redirect-url="{% url 'ecg:home' %}" data-delay-ms="3000"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'users/js/main.js' %}"></script>
 {% endblock %}

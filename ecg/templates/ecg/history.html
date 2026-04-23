@@ -11,7 +11,7 @@
                     <div>
                         <h1 class="h5 mb-1">Lịch sử phân tích ECG
                             {% if is_admin_view %}
-                                <span class="badge bg-warning text-dark ms-2" style="font-size:0.65rem;">ADMIN · Tất cả người dùng</span>
+                                <span class="badge bg-warning text-dark ms-2 admin-badge">ADMIN · Tất cả người dùng</span>
                             {% endif %}
                         </h1>
                         <p class="text-secondary small mb-0">
@@ -25,13 +25,13 @@
                 </div>
 
                 {% if predictions %}
-                    <form method="post" action="{% url 'ecg:delete_history' %}">
+                    <form method="post" action="{% url 'ecg:delete_history' %}" id="history-delete-form">
                         {% csrf_token %}
                         <div class="table-responsive">
                             <table class="table table-dark table-sm align-middle mb-0 history-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 1%;">
+                                        <th class="history-select-col">
                                             <input type="checkbox" id="select-all">
                                         </th>
                                         <th>Thời gian</th>
@@ -96,8 +96,8 @@
                                     type="submit"
                                     name="action"
                                     value="selected"
-                                    class="btn btn-outline-danger btn-sm"
-                                    onclick="return confirm('Bạn có chắc chắn muốn xóa các bản ghi đã chọn?');"
+                                    class="btn btn-outline-danger btn-sm history-delete-btn"
+                                    data-confirm-message="Bạn có chắc chắn muốn xóa các bản ghi đã chọn?"
                                 >
                                     Xóa đã chọn
                                 </button>
@@ -105,25 +105,14 @@
                                     type="submit"
                                     name="action"
                                     value="all"
-                                    class="btn btn-danger btn-sm"
-                                    onclick="return confirm('Bạn có chắc chắn muốn xóa TẤT CẢ lịch sử phân tích?');"
+                                    class="btn btn-danger btn-sm history-delete-btn"
+                                    data-confirm-message="Bạn có chắc chắn muốn xóa TẤT CẢ lịch sử phân tích?"
                                 >
                                     Xóa tất cả
                                 </button>
                             </div>
                         </div>
                     </form>
-                    <script>
-                        document.addEventListener("DOMContentLoaded", function () {
-                            const selectAll = document.getElementById("select-all");
-                            if (!selectAll) return;
-                            selectAll.addEventListener("change", function () {
-                                document.querySelectorAll(".prediction-checkbox").forEach(function (cb) {
-                                    cb.checked = selectAll.checked;
-                                });
-                            });
-                        });
-                    </script>
                 {% else %}
                     <p class="text-secondary small mb-0">
                         Chưa có bản ghi phân tích nào. Hãy thực hiện phân tích ECG trước.

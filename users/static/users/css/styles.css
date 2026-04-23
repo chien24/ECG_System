@@ -1,0 +1,83 @@
+/* Shared styles for users app pages */
+.user-card {
+    max-width: 420px;
+    margin: 0 auto;
+}
+
+.user-form .form-control,
+.user-input {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid var(--color-border-soft, rgba(148, 163, 184, 0.4));
+    color: var(--color-text-primary, #e5e7eb);
+}
+
+.user-form .form-control:focus,
+.user-input:focus {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: var(--color-success, #22c55e);
+    box-shadow: 0 0 0 0.2rem rgba(34, 197, 94, 0.25);
+    color: var(--color-text-primary, #e5e7eb);
+}
+
+.user-form .form-control::placeholder {
+    color: var(--color-text-muted, rgba(148, 163, 184, 0.85));
+}
+
+.user-btn {
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+}
+
+.user-alert {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fecaca;
+}
+
+.user-link {
+    color: #86efac;
+    text-decoration: none;
+}
+
+.user-link:hover {
+    color: #bbf7d0;
+    text-decoration: underline;
+}
+
+.user-logged-out-icon {
+    color: var(--color-text-muted, rgba(148, 163, 184, 0.9));
+}
+
+.stat-card {
+    border-radius: 1rem;
+    padding: 1.25rem;
+    text-align: center;
+    border: 1px solid var(--color-border-soft, rgba(148, 163, 184, 0.25));
+    box-shadow: 0 8px 20px rgba(2, 6, 23, 0.28);
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary, #e5e7eb);
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #cbd5e1);
+    margin-top: 0.25rem;
+}
+
+.stat-card-signals { background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05)); }
+.stat-card-predictions { background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.05)); }
+.stat-card-normal { background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.05)); }
+.stat-card-abnormal { background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05)); }
+
+.stats-table th,
+.stats-table td {
+    border-color: var(--color-border-soft, rgba(51, 65, 85, 0.9)) !important;
+}
+
+.stats-table tbody tr:hover {
+    background: rgba(51, 65, 85, 0.25);
+}

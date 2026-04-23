@@ -4,7 +4,7 @@
 {% block title %}Đăng nhập · Hệ thống phân tích ECG{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'users/styles.css' %}">
+<link rel="stylesheet" href="{% static 'users/css/styles.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -48,4 +48,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'users/js/main.js' %}"></script>
 {% endblock %}

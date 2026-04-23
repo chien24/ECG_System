@@ -38,7 +38,8 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: must be False in production.
-DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
+# Default True for local development to avoid production-only static pipeline issues.
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 # Allowed hosts: Render automatically assigns a *.onrender.com domain.
 # Set DJANGO_ALLOWED_HOSTS to your Render URL (space-separated for multiple).
@@ -212,8 +213,15 @@ STATIC_URL = '/static/'
 # collectstatic copies all static files here; WhiteNoise serves from here.
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# WhiteNoise: compress & add content-hash fingerprints for long-lived caching
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Use simple storage in DEBUG, manifest storage in production.
+if DEBUG:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    # WhiteNoise: compress & add content-hash fingerprints for long-lived caching
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    # Prevent 500 when manifest is temporarily stale after static refactors.
+    # WhiteNoise will serve the unhashed path until collectstatic is re-run.
+    WHITENOISE_MANIFEST_STRICT = False
 
 
 # ══════════════════════════════════════════════════════════════

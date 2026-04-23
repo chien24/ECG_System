@@ -2,77 +2,6 @@
 
 {% block title %}Chi tiết dự đoán · Hệ thống phân tích ECG{% endblock %}
 
-{% block extra_css %}
-<style>
-  /* ── Detail list colours ── */
-  .detail-list dt {
-    color: #94a3b8;   /* light slate – readable on dark */
-    font-weight: 500;
-  }
-  .detail-list dd {
-    color: #f1f5f9;   /* near-white for values */
-    margin-bottom: 0.85rem;
-  }
-
-  /* ── Download button strip ── */
-  .download-strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid rgba(148,163,184,0.2);
-  }
-
-  .btn-download {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.55rem 1.1rem;
-    border-radius: 0.6rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
-    cursor: pointer;
-  }
-
-  .btn-download:active { transform: scale(0.97); }
-
-  .btn-dl-chart {
-    background: linear-gradient(135deg, #6366f1, #818cf8);
-    color: #fff;
-    border: none;
-  }
-  .btn-dl-chart:hover { background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 18px rgba(99,102,241,0.4); color: #fff; }
-
-  .btn-dl-csv {
-    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
-    color: #fff;
-    border: none;
-  }
-  .btn-dl-csv:hover { background: linear-gradient(135deg, #0284c7, #0ea5e9); box-shadow: 0 4px 18px rgba(14,165,233,0.4); color: #fff; }
-
-  .download-note {
-    font-size: 0.78rem;
-    color: #64748b;
-    margin-top: 0.5rem;
-    width: 100%;
-  }
-
-  /* ── Section heading ── */
-  .section-title {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #64748b;
-    margin-bottom: 0.4rem;
-  }
-
-  .card-glass h1 { color: #e2e8f0; }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-8">
@@ -92,7 +21,7 @@
             {% if prediction.signal.user %}
               {{ prediction.signal.user.username }}
             {% else %}
-              <span style="color:#64748b">Khách</span>
+              <span class="text-meta">Khách</span>
             {% endif %}
           </dd>
 
@@ -109,7 +38,7 @@
           <dd class="col-sm-8">{{ prediction.model.model_name }} {{ prediction.model.version }}</dd>
 
           <dt class="col-sm-4">Đường dẫn model</dt>
-          <dd class="col-sm-8" style="word-break:break-all;">{{ prediction.model.model_path }}</dd>
+          <dd class="col-sm-8 model-path">{{ prediction.model.model_path }}</dd>
 
           <dt class="col-sm-4">Lớp mô hình</dt>
           <dd class="col-sm-8">{{ prediction.predicted_class }}</dd>
